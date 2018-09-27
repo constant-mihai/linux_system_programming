@@ -250,6 +250,24 @@ int wrapper_truncate(const char* path, off_t len) {
 
 /**
  * ******************************************************
+ *  Sscanf wrapper.
+ * ******************************************************
+**/
+void wrapper_sscanf() {
+    int nr = 10;
+    const char * line = "10 ten(";
+    char str[128];
+    if (sscanf (line, "%d %64[^(]", &nr, str) < 2) {
+        fprintf(stderr, "Bad command in wrapper scanf\n");
+        printf("%s\n", str);
+    }
+    else {
+        printf("%s\n", str);
+    }
+}
+
+/**
+ * ******************************************************
  *  Main
  * ******************************************************
 **/
@@ -264,6 +282,8 @@ int main(int argc, char ** argv) {
         perror("getcwd() error");
         return 1;
     }
+
+    wrapper_sscanf();
 
     fd = wrapper_open("/home/teach/pearl", O_WRONLY | O_TRUNC);
     
