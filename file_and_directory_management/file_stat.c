@@ -17,6 +17,8 @@
  *
  */
 
+#include <sys/statvfs.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <grp.h>
 #include <sys/stat.h>
@@ -25,6 +27,10 @@
 #include <dirent.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/sysmacros.h>
+#include <time.h>
+#include <math.h>
+#include <mntent.h>
 
 
 /*
@@ -45,7 +51,8 @@ int is_on_physical_device (int fd)
                 return -1;
         }
 
-        return gnu_dev_major (sb.st_dev);
+        //return gnu_dev_major (sb.st_dev);
+        return 0;
 }
 
 void wrapper_change_mod() {
@@ -134,9 +141,30 @@ int find_file_in_dir (const char *path, const char *file)
         return ret;
 }
 
+void process(const char *filename)
+{
+	FILE *fp;
+	struct mntent *fs;
+
+	fp = setmntent(filename, "r");	/* read only */
+	if (fp == NULL) {
+		fprintf(stderr, "%s: could not open: %s\n",
+			filename, strerror(errno));
+		exit(1);
+	}
+
+	while ((fs = getmntent(fp)) != NULL) {
+		//do_statvfs(fs);
+        printf("MNT_DIR %s", fs->mnt_dir);
+        printf("fsname %s", fs->mnt_fsname);
+    }
+
+	endmntent(fp);
+}
 
 int main (int argc, char *argv[])
 {
+#if 0
         struct stat sb;
         int ret;
 
@@ -185,4 +213,66 @@ int main (int argc, char *argv[])
         }
 
         return 0;
+#endif
+        struct stat sb;
+
+        if (argc != 2) {
+            fprintf(stderr, "Usage: %s <pathname>\n", argv[0]);
+            exit(1);
+        }
+
+        if (lstat(argv[1], &sb) == -1) {
+            perror("lstat");
+            exit(1);
+        }
+
+        printf("ID of containing device:  [%lx,%lx]\n",
+               (long) major(sb.st_dev), (long) minor(sb.st_dev));
+
+        printf("File type:		     ");
+
+        switch (sb.st_mode & S_IFMT) {
+            case S_IFBLK:  printf("block device\n");	       break;
+            case S_IFCHR:  printf("character device\n");        break;
+            case S_IFDIR:  printf("directory\n");	       break;
+            case S_IFIFO:  printf("FIFO/pipe\n");	       break;
+            case S_IFLNK:  printf("symlink\n");		       break;
+            case S_IFREG:  printf("regular file\n");	       break;
+            case S_IFSOCK: printf("socket\n");		       break;
+            default:	  printf("unknown?\n"); 	       break;
+        }
+
+        printf("I-node number:	     %ld\n", (long) sb.st_ino);
+
+        printf("Mode:		     %lo (octal)\n",
+               (unsigned long) sb.st_mode);
+
+        printf("Link count:		     %ld\n", (long) sb.st_nlink);
+        printf("Ownership:		     UID=%ld   GID=%ld\n",
+               (long) sb.st_uid, (long) sb.st_gid);
+
+        printf("Preferred I/O block size: %ld bytes\n",
+               (long) sb.st_blksize);
+        printf("File size:		     %lld bytes\n",
+               (long long) sb.st_size);
+        printf("Blocks allocated:	     %lld\n",
+               (long long) sb.st_blocks);
+
+        printf("Last status change:	     %s", ctime(&sb.st_ctime));
+        printf("Last file access:	     %s", ctime(&sb.st_atime));
+        printf("Last file modification:   %s", ctime(&sb.st_mtime));
+
+        struct statvfs stat;
+
+        if (statvfs(argv[1], &stat) != 0) {
+            // error happens, just quits here
+            return -1;
+        }
+
+        printf("Total space: %.3f GB\n",  (stat.f_bsize * stat.f_blocks) / pow(1024, 3));
+        printf("Available space: %.3f GB\n", (stat.f_bsize * stat.f_bavail) / pow(1024, 3));
+
+        process(argv[1]);
+
+        exit(0);
 }
